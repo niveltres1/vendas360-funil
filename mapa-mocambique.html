@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobertura Vendas 360 em Moçambique</title>
+<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js" integrity="sha384-Ukv1p/xTma6P4/2bY5KzWBw+ydSpXmhCMtyciIQVDJ1RmOxtCYNMF1uXT9T63H67" crossorigin="anonymous"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; font-family: Arial, Helvetica, sans-serif; overflow: hidden; }
+  #map { width: 100%; height: 100%; }
+  .pulse { animation: pulse 2.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes pulse { 0% { r: 4; opacity: .55; } 70% { opacity: 0; } 100% { r: 22; opacity: 0; } }
+  .dot { animation: dotIn .7s ease-out both; }
+  @keyframes dotIn { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
+  .lbl { font-size: 11px; fill: #A9B6C7; letter-spacing: .02em; }
+  .sweep { animation: sweep 6s linear infinite; transform-origin: center; }
+  @keyframes sweep { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+const CITIES = [
+  { n: "Pemba",      c: [40.52, -12.97], big: true },
+  { n: "Nacala",     c: [40.67, -14.54] },
+  { n: "Lichinga",   c: [35.24, -13.31] },
+  { n: "Nampula",    c: [39.27, -15.12], big: true },
+  { n: "Tete",       c: [33.59, -16.16], big: true },
+  { n: "Quelimane",  c: [36.89, -17.88] },
+  { n: "Chimoio",    c: [33.48, -19.12] },
+  { n: "Beira",      c: [34.84, -19.84], big: true },
+  { n: "Inhambane",  c: [35.38, -23.86] },
+  { n: "Xai-Xai",    c: [33.64, -25.05] },
+  { n: "Maputo",     c: [32.58, -25.97], big: true }
+];
+
+(async function () {
+  const el = document.getElementById("map");
+  const w = el.clientWidth || 600, h = el.clientHeight || 560;
+  const topo = await d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json");
+  const all = topojson.feature(topo, topo.objects.countries).features;
+  const moz = all.find(f => f.properties.name === "Mozambique");
+
+  const proj = d3.geoMercator().fitExtent([[46, 34], [w - 46, h - 34]], moz);
+  const path = d3.geoPath(proj);
+
+  const svg = d3.select(el).append("svg")
+    .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("width", "100%").attr("height", "100%");
+
+  const defs = svg.append("defs");
+  const g = defs.append("linearGradient").attr("id", "mozFill").attr("x1", "0").attr("y1", "0").attr("x2", "0.6").attr("y2", "1");
+  g.append("stop").attr("offset", "0%").attr("stop-color", "#1C6DC1").attr("stop-opacity", ".38");
+  g.append("stop").attr("offset", "100%").attr("stop-color", "#F5821F").attr("stop-opacity", ".22");
+  const glow = defs.append("filter").attr("id", "glow").attr("x", "-40%").attr("y", "-40%").attr("width", "180%").attr("height", "180%");
+  glow.append("feGaussianBlur").attr("stdDeviation", "7").attr("result", "b");
+  const m = glow.append("feMerge"); m.append("feMergeNode").attr("in", "b"); m.append("feMergeNode").attr("in", "SourceGraphic");
+
+  svg.append("g").selectAll("path").data(all.filter(f => f !== moz))
+    .join("path").attr("d", path)
+    .attr("fill", "#0E1726").attr("stroke", "rgba(255,255,255,0.06)").attr("stroke-width", 1);
+
+  const cx = w / 2, cy = h / 2;
+  svg.append("g").attr("class", "sweep").attr("transform-origin", `${cx} ${cy}`)
+    .append("line").attr("x1", cx).attr("y1", cy).attr("x2", cx).attr("y2", cy - Math.max(w, h))
+    .attr("stroke", "rgba(56,189,248,0.16)").attr("stroke-width", 60);
+
+  svg.append("path").datum(moz).attr("d", path)
+    .attr("fill", "url(#mozFill)").attr("stroke", "#38BDF8").attr("stroke-width", 1.6)
+    .attr("filter", "url(#glow)");
+
+  const pts = svg.append("g");
+  CITIES.forEach((city, i) => {
+    const [x, y] = proj(city.c);
+    const r = city.big ? 5 : 3.6;
+    pts.append("circle").attr("class", "pulse").attr("cx", x).attr("cy", y).attr("r", r)
+      .attr("fill", "none").attr("stroke", "#F5821F").attr("stroke-width", 1.4)
+      .style("animation-delay", (i * 0.24) + "s");
+    pts.append("circle").attr("class", "dot").attr("cx", x).attr("cy", y).attr("r", r)
+      .attr("fill", city.big ? "#F5821F" : "#38BDF8")
+      .style("animation-delay", (i * 0.09) + "s");
+    const right = x < w * 0.55;
+    pts.append("text").attr("class", "dot lbl").attr("x", right ? x + 10 : x - 10).attr("y", y + 4)
+      .attr("text-anchor", right ? "start" : "end")
+      .style("animation-delay", (i * 0.09 + 0.15) + "s")
+      .attr("fill", city.big ? "#E4EAF2" : "#93A1B3")
+      .text(city.n);
+  });
+})();
+</script>
+</body>
+</html>
